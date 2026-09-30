@@ -1,12 +1,15 @@
 from decimal import Decimal
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from app.database import Base
-from app.models.order import Order
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import mapped_column, relationship
 from sqlalchemy.orm.base import Mapped
 from sqlalchemy.sql.sqltypes import Numeric, String
+
+if TYPE_CHECKING:
+    from app.models.order import Order
 
 class OrderItem(Base):
     __tablename__ = "order_items"
