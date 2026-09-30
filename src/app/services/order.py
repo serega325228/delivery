@@ -3,7 +3,6 @@ from uuid import UUID
 
 from app.exceptions import (
     CourierNotAllowedError,
-    CourierNotFoundError,
     CourierUnavailableError,
     CustomerNotFoundError,
     DeliveryMethodNotSelectedError,
@@ -11,15 +10,13 @@ from app.exceptions import (
     OrderModificationError,
     OrderNotFoundError,
 )
-from app.schemas.delivery import DeliveryType, get_delivery_method
 from app.models.order import Order, OrderStatus
 from app.models.order_item import OrderItem
 from app.repositories.courier import CourierRepository
 from app.repositories.customer import CustomerRepository
 from app.repositories.order import OrderRepository
-from app.schemas.order import OrderCreate, OrderItemCreate
+from app.schemas.delivery import DeliveryType, get_delivery_method
 from app.services.courier import CourierService
-
 
 _ALLOWED_TRANSITIONS: dict[OrderStatus, set[OrderStatus]] = {
     OrderStatus.CREATED: {OrderStatus.CONFIRMED, OrderStatus.CANCELLED},
@@ -68,9 +65,13 @@ class OrderService:
 
     def set_delivery_method(self, order_id: UUID, delivery_type: DeliveryType) -> Order:
         order = self.get_order(order_id)
-        self._ensure_created(order, "Менять способ доставки можно только у созданного заказа")
+        self._ensure_created(
+            order, "Менять способ доставки можно только у созданного заказа"
+        )
         if order.courier:
-            raise OrderModificationError("Нельзя менять доставку после назначения курьера")
+            raise OrderModificationError(
+                "Нельзя менять доставку после назначения курьера"
+            )
         delivery_method = get_delivery_method(delivery_type)
         order.delivery_type = delivery_method.delivery_type.value
         order.delivery_cost = delivery_method.calculate_cost(order)
@@ -80,10 +81,12 @@ class OrderService:
 
     def find_courier(self, order: Order) -> Order:
         if order.status not in {OrderStatus.CREATED, OrderStatus.CONFIRMED}:
-            raise CourierNotAllowedError("Курьера нельзя назначить на этом этапе заказа")
+            raise CourierNotAllowedError(
+                "Курьера нельзя назначить на этом этапе заказа"
+            )
         if not order.delivery_type:
             raise DeliveryMethodNotSelectedError()
-        if not get_delivery_method(order.delivery_type).requires_courier(): #think about implementation of delivery
+        if not get_delivery_method(order.delivery_type).requires_courier():
             raise CourierNotAllowedError("Для самовывоза курьер не нужен")
         if order.courier:
             raise CourierNotAllowedError("Курьер уже назначен")
@@ -111,10 +114,16 @@ class OrderService:
         if new_status == OrderStatus.IN_DELIVERY:
             if not order.delivery_type:
                 raise DeliveryMethodNotSelectedError()
-            if get_delivery_method(order.delivery_type).requires_courier() and not order.courier:
+            if (
+                get_delivery_method(order.delivery_type).requires_courier()
+                and not order.courier
+            ):
                 raise CourierNotAllowedError("Перед отправкой назначьте курьера")
         order.status = new_status.value
-        if new_status in {OrderStatus.DELIVERED, OrderStatus.CANCELLED} and order.courier:
+        if (
+            new_status in {OrderStatus.DELIVERED, OrderStatus.CANCELLED}
+            and order.courier
+        ):
             CourierService.release(order.courier)
         self._commit()
         return order

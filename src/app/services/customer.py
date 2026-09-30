@@ -1,10 +1,10 @@
 from uuid import UUID
 
-from app.repositories.customer import CustomerRepository
 from sqlalchemy.exc import IntegrityError
 
 from app.exceptions import CustomerNotFoundError, DomainError
 from app.models.customer import Customer
+from app.repositories.customer import CustomerRepository
 from app.schemas.customer import CustomerCreate
 
 
