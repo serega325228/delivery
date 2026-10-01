@@ -1,3 +1,4 @@
+from typing import Iterator
 from uuid import UUID
 
 from sqlalchemy.exc import IntegrityError
@@ -28,7 +29,7 @@ class CourierService:
             raise CourierNotFoundError(courier_id)
         return courier
 
-    def get_all(self) -> list[Courier]:
+    def get_all(self) -> Iterator[Courier]:
         return self.couriers.get_all()
 
     @staticmethod

@@ -1,3 +1,4 @@
+from typing import Iterator
 from uuid import UUID
 
 from sqlalchemy import select
@@ -20,9 +21,9 @@ class CourierRepository:
         courier = self.session.get(Courier, courier_id)
         return courier
 
-    def get_all(self) -> list[Courier]:
+    def get_all(self) -> Iterator[Courier]:
         couriers = self.session.scalars(select(Courier).order_by(Courier.id)).all()
-        return list(couriers)
+        return couriers
 
     def get_available(self) -> Courier | None:
         stmt = select(Courier).where(Courier.available == True).limit(1)

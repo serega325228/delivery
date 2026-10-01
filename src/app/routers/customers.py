@@ -5,13 +5,13 @@ from fastapi import APIRouter, Depends, status
 from fastapi.exceptions import HTTPException
 
 from app.exceptions import NotFoundError
-from app.main import get_customer_repository
+from app.main import get_customer_service
 from app.schemas.customer import CustomerReq, CustomerRes
 from app.services.customer import CustomerService, DomainError
 
 router = APIRouter(prefix="/customers", tags=["customers"])
 
-Customers = Annotated[CustomerService, Depends(get_customer_repository)]
+Customers = Annotated[CustomerService, Depends(get_customer_service)]
 
 @router.post("", response_model=CustomerRes, status_code=status.HTTP_201_CREATED)
 async def create_customer(
