@@ -24,6 +24,11 @@ class OrderNotFoundError(NotFoundError):
         super().__init__(f"Заказ с id={order_id} не найден")
 
 
+class OrderItemNotFoundError(NotFoundError):
+    def __init__(self, item_id: UUID) -> None:
+        super().__init__(f"Позиция с id={item_id} не найдена в этом заказе")
+
+
 class InvalidStatusTransitionError(DomainError):
     """Raised when an order status transition is forbidden"""
 

@@ -1,7 +1,7 @@
 [project]
 name = "delivery"
 version = "0.1.0"
-description = "Console, FastAPI and Streamlit delivery service simulator"
+description = "FastAPI and Streamlit delivery service simulator"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
@@ -12,9 +12,6 @@ dependencies = [
     "streamlit>=1.49,<2",
     "uvicorn>=0.35,<1",
 ]
-
-[project.scripts]
-delivery-cli = "app.console.cli:run"
 
 [dependency-groups]
 dev = [

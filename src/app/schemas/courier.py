@@ -10,6 +10,7 @@ class CourierReq(BaseModel):
 
     name: str = Field(min_length=2, max_length=100)
     phone: str = Field(pattern=r"^\+?[0-9 ()-]{7,20}$")
+    capacity: int = Field(default=10, gt=0)
 
 
 class CourierRes(BaseModel):
@@ -19,6 +20,7 @@ class CourierRes(BaseModel):
     name: str
     phone: str
     available: bool
+    capacity: int
 
     @classmethod
     def from_domain(cls, courier: Courier) -> "CourierRes":

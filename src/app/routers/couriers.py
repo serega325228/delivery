@@ -4,8 +4,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, status
 from fastapi.exceptions import HTTPException
 
+from app.dependencies import get_courier_service
 from app.exceptions import DomainError, NotFoundError
-from app.main import get_courier_service
 from app.schemas.courier import CourierReq, CourierRes
 from app.services.courier import CourierService
 
@@ -16,7 +16,7 @@ Couriers = Annotated[CourierService, Depends(get_courier_service)]
 @router.post("", response_model=CourierRes, status_code=status.HTTP_201_CREATED)
 async def create_courier(data: CourierReq, couriers: Couriers) -> CourierRes:
     try:
-        courier = couriers.create(data.name, data.phone)
+        courier = couriers.create(data.name, data.phone, data.capacity)
     except NotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except DomainError as error:

@@ -2,11 +2,11 @@ from decimal import Decimal
 from uuid import UUID
 
 from app.exceptions import (
-    CourierNotAllowedError,
     CourierUnavailableError,
     CustomerNotFoundError,
     DeliveryMethodNotSelectedError,
     InvalidStatusTransitionError,
+    OrderItemNotFoundError,
     OrderModificationError,
     OrderNotFoundError,
 )
@@ -16,6 +16,7 @@ from app.repositories.courier import CourierRepository
 from app.repositories.customer import CustomerRepository
 from app.repositories.order import OrderRepository
 from app.schemas.delivery import DeliveryType, get_delivery_method
+from app.schemas.order import OrderItemCreate, OrderReq
 from app.services.courier import CourierService
 
 _ALLOWED_TRANSITIONS: dict[OrderStatus, set[OrderStatus]] = {
@@ -39,11 +40,11 @@ class OrderService:
         self.couriers = courier_repository
 
     def create_order(self, customer_id: UUID, address: str) -> Order:
+        data = OrderReq(customer_id=customer_id, address=address)
         customer = self.customers.get_by_id(customer_id)
         if not customer:
             raise CustomerNotFoundError(customer_id)
-        order = self.orders.create(customer_id, address)
-        order = self.find_courier(order)
+        order = self.orders.create(customer_id, data.address)
         self._commit()
         return order
 
@@ -56,10 +57,32 @@ class OrderService:
     def get_orders(self) -> list[Order]:
         return self.orders.get_all()
 
+    def get_customer_orders(self, customer_id: UUID) -> list[Order]:
+        if not self.customers.get_by_id(customer_id):
+            raise CustomerNotFoundError(customer_id)
+        return self.orders.get_by_customer(customer_id)
+
+    def get_latest_order(self, customer_id: UUID) -> Order | None:
+        if not self.customers.get_by_id(customer_id):
+            raise CustomerNotFoundError(customer_id)
+        return self.orders.get_latest_by_customer(customer_id)
+
     def add_item(self, order_id: UUID, item: OrderItem) -> Order:
         order = self.get_order(order_id)
         self._ensure_created(order, "Добавлять позиции можно только в созданный заказ")
+        data = OrderItemCreate(name=item.name, quantity=item.quantity, price=item.price)
+        item.name, item.quantity, item.price = data.name, data.quantity, data.price
         order.items.append(item)
+        self._commit()
+        return order
+
+    def remove_item(self, order_id: UUID, item_id: UUID) -> Order:
+        order = self.get_order(order_id)
+        self._ensure_created(order, "Удалять позиции можно только из созданного заказа")
+        item = next((item for item in order.items if item.id == item_id), None)
+        if item is None:
+            raise OrderItemNotFoundError(item_id)
+        order.items.remove(item)
         self._commit()
         return order
 
@@ -68,33 +91,28 @@ class OrderService:
         self._ensure_created(
             order, "Менять способ доставки можно только у созданного заказа"
         )
-        if order.courier:
-            raise OrderModificationError(
-                "Нельзя менять доставку после назначения курьера"
-            )
+        if not order.items:
+            raise OrderModificationError("Сначала добавьте позиции в заказ")
         delivery_method = get_delivery_method(delivery_type)
+        courier = None
+        if delivery_method.requires_courier():
+            required_capacity = sum(item.quantity for item in order.items)
+            courier = self.couriers.get_available(required_capacity)
+            if not courier:
+                raise CourierUnavailableError(
+                    "Все курьеры заняты или нет курьера нужной вместимости. "
+                    "Выберите самовывоз или подождите курьера и попробуйте снова."
+                )
+            try:
+                CourierService(self.couriers).reserve(courier)
+            except CourierUnavailableError:
+                self.orders.rollback()
+                raise
         order.delivery_type = delivery_method.delivery_type.value
         order.delivery_cost = delivery_method.calculate_cost(order)
         order.delivery_eta = delivery_method.estimate_delivery_time(order)
-        self._commit()
-        return order
-
-    def find_courier(self, order: Order) -> Order:
-        if order.status not in {OrderStatus.CREATED, OrderStatus.CONFIRMED}:
-            raise CourierNotAllowedError(
-                "Курьера нельзя назначить на этом этапе заказа"
-            )
-        if not order.delivery_type:
-            raise DeliveryMethodNotSelectedError()
-        if not get_delivery_method(order.delivery_type).requires_courier():
-            raise CourierNotAllowedError("Для самовывоза курьер не нужен")
-        if order.courier:
-            raise CourierNotAllowedError("Курьер уже назначен")
-        courier = self.couriers.get_available()
-        if not courier:
-            raise CourierUnavailableError("Нет доступных курьеров")
-        CourierService.reserve(courier)
         order.courier = courier
+        order.status = OrderStatus.CONFIRMED.value
         self._commit()
         return order
 
@@ -118,7 +136,7 @@ class OrderService:
                 get_delivery_method(order.delivery_type).requires_courier()
                 and not order.courier
             ):
-                raise CourierNotAllowedError("Перед отправкой назначьте курьера")
+                raise OrderModificationError("Перед отправкой назначьте курьера")
         order.status = new_status.value
         if (
             new_status in {OrderStatus.DELIVERED, OrderStatus.CANCELLED}
@@ -137,8 +155,12 @@ class OrderService:
         return OrderService.calculate_goods_cost(order) + order.delivery_cost
 
     @staticmethod
+    def can_edit(order: Order) -> bool:
+        return order.status == OrderStatus.CREATED and order.courier is None
+
+    @staticmethod
     def _ensure_created(order: Order, message: str) -> None:
-        if order.status != OrderStatus.CREATED:
+        if not OrderService.can_edit(order):
             raise OrderModificationError(message)
 
     def _commit(self) -> None:

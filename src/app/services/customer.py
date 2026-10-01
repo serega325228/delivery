@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from app.exceptions import CustomerNotFoundError, DomainError
 from app.models.customer import Customer
 from app.repositories.customer import CustomerRepository
-from app.schemas.customer import CustomerCreate
+from app.schemas.customer import CustomerReq
 
 
 class CustomerService:
@@ -13,7 +13,7 @@ class CustomerService:
         self.customers = customer_repository
 
     def create(self, name: str, phone: str) -> Customer:
-        data = CustomerCreate(name=name, phone=phone)
+        data = CustomerReq(name=name, phone=phone)
         try:
             customer = self.customers.create(data.name, data.phone)
             self.customers.commit()
@@ -21,6 +21,15 @@ class CustomerService:
         except IntegrityError as error:
             self.customers.rollback()
             raise DomainError("Клиент с таким телефоном уже существует") from error
+
+    def login(self, name: str, phone: str) -> Customer:
+        data = CustomerReq(name=name, phone=phone)
+        customer = self.customers.get_by_phone(data.phone)
+        if customer:
+            if customer.name.casefold() != data.name.casefold():
+                raise DomainError("Этот телефон уже зарегистрирован на другое имя")
+            return customer
+        return self.create(data.name, data.phone)
 
     def get(self, customer_id: UUID) -> Customer:
         customer = self.customers.get_by_id(customer_id)

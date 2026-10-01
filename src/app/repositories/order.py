@@ -21,8 +21,23 @@ class OrderRepository:
         return order
 
     def get_all(self) -> list[Order]:
-        orders = self.session.scalars(self._query().order_by(Order.id)).all()
+        orders = self.session.scalars(self._query().order_by(Order.created_at.desc(), Order.id)).all()
         return list(orders)
+
+    def get_by_customer(self, customer_id: UUID) -> list[Order]:
+        return list(self.session.scalars(
+            self._query()
+            .where(Order.customer_id == customer_id)
+            .order_by(Order.created_at.desc(), Order.id)
+        ).all())
+
+    def get_latest_by_customer(self, customer_id: UUID) -> Order | None:
+        return self.session.scalar(
+            self._query()
+            .where(Order.customer_id == customer_id)
+            .order_by(Order.created_at.desc(), Order.id)
+            .limit(1)
+        )
 
     def flush(self) -> None:
         self.session.flush()

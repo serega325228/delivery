@@ -1,10 +1,10 @@
 from uuid import UUID, uuid4
 
-from app.database import Base
-
 from sqlalchemy.orm import mapped_column
 from sqlalchemy.orm.base import Mapped
-from sqlalchemy.sql.sqltypes import Boolean, String
+from sqlalchemy.sql.sqltypes import Boolean, Integer, String
+
+from app.database import Base
 
 
 class Courier(Base):
@@ -14,3 +14,4 @@ class Courier(Base):
     name: Mapped[str] = mapped_column(String(100))
     phone: Mapped[str] = mapped_column(String(20), unique=True)
     available: Mapped[bool] = mapped_column(Boolean, default=True)
+    capacity: Mapped[int] = mapped_column(Integer, default=10)

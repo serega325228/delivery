@@ -1,4 +1,3 @@
-from typing import Iterator
 from uuid import UUID
 
 from sqlalchemy.exc import IntegrityError
@@ -6,17 +5,17 @@ from sqlalchemy.exc import IntegrityError
 from app.exceptions import CourierNotFoundError, CourierUnavailableError, DomainError
 from app.models.courier import Courier
 from app.repositories.courier import CourierRepository
-from app.schemas.courier import CourierCreate
+from app.schemas.courier import CourierReq
 
 
 class CourierService:
     def __init__(self, courier_repository: CourierRepository) -> None:
         self.couriers = courier_repository
 
-    def create(self, name: str, phone: str) -> Courier:
-        data = CourierCreate(name=name, phone=phone)
+    def create(self, name: str, phone: str, capacity: int = 10) -> Courier:
+        data = CourierReq(name=name, phone=phone, capacity=capacity)
         try:
-            courier = self.couriers.create(data.name, data.phone)
+            courier = self.couriers.create(data.name, data.phone, data.capacity)
             self.couriers.commit()
             return courier
         except IntegrityError as error:
@@ -29,12 +28,11 @@ class CourierService:
             raise CourierNotFoundError(courier_id)
         return courier
 
-    def get_all(self) -> Iterator[Courier]:
+    def get_all(self) -> list[Courier]:
         return self.couriers.get_all()
 
-    @staticmethod
-    def reserve(courier: Courier) -> None:
-        if not courier.available:
+    def reserve(self, courier: Courier) -> None:
+        if not self.couriers.reserve(courier.id):
             raise CourierUnavailableError(f"Курьер {courier.name} сейчас занят")
         courier.available = False
 

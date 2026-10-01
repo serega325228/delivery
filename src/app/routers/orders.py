@@ -4,8 +4,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, status
 from fastapi.exceptions import HTTPException
 
+from app.dependencies import get_order_service
 from app.exceptions import DomainError, NotFoundError
-from app.main import get_order_service
 from app.schemas.order import (
     DeliveryMethodUpdate,
     OrderItemCreate,
@@ -32,9 +32,13 @@ async def create_order(request: OrderReq, orders: Orders) -> OrderRes:
 
 
 @router.get("", response_model=list[OrderRes])
-async def get_orders(orders: Orders) -> list[OrderRes]:
+async def get_orders(orders: Orders, customer_id: UUID | None = None) -> list[OrderRes]:
     try:
-        all_orders = orders.get_orders()
+        all_orders = (
+            orders.get_customer_orders(customer_id)
+            if customer_id
+            else orders.get_orders()
+        )
     except NotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except DomainError as error:
@@ -42,10 +46,32 @@ async def get_orders(orders: Orders) -> list[OrderRes]:
     return [OrderRes.from_domain(order) for order in all_orders]
 
 
+@router.get("/latest", response_model=OrderRes | None)
+async def get_latest_order(customer_id: UUID, orders: Orders) -> OrderRes | None:
+    try:
+        order = orders.get_latest_order(customer_id)
+    except NotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except DomainError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return OrderRes.from_domain(order) if order else None
+
+
 @router.get("/{order_id}", response_model=OrderRes)
 async def get_order(order_id: UUID, orders: Orders) -> OrderRes:
     try:
         order = orders.get_order(order_id)
+    except NotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except DomainError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return OrderRes.from_domain(order)
+
+
+@router.delete("/{order_id}/items/{item_id}", response_model=OrderRes)
+async def remove_item(order_id: UUID, item_id: UUID, orders: Orders) -> OrderRes:
+    try:
+        order = orders.remove_item(order_id, item_id)
     except NotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except DomainError as error:
@@ -75,19 +101,6 @@ async def set_delivery(
     except DomainError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     return OrderRes.from_domain(order)
-
-
-# @router.put("/{order_id}/courier", response_model=OrderRes)
-# async def assign_courier(
-#     order_id: UUID, data: CourierAssignment, orders: Orders
-# ) -> OrderRes:
-#     try:
-#         order = orders.assign_courier(order_id, data.courier_id)
-#     except NotFoundError as error:
-#         raise HTTPException(status_code=404, detail=str(error)) from error
-#     except DomainError as error:
-#         raise HTTPException(status_code=409, detail=str(error)) from error
-#     return OrderRes.from_domain(order)
 
 
 @router.put("/{order_id}/status", response_model=OrderRes)

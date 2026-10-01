@@ -4,14 +4,24 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, status
 from fastapi.exceptions import HTTPException
 
-from app.exceptions import NotFoundError
-from app.main import get_customer_service
+from app.dependencies import get_customer_service
+from app.exceptions import DomainError, NotFoundError
 from app.schemas.customer import CustomerReq, CustomerRes
-from app.services.customer import CustomerService, DomainError
+from app.services.customer import CustomerService
 
 router = APIRouter(prefix="/customers", tags=["customers"])
 
 Customers = Annotated[CustomerService, Depends(get_customer_service)]
+
+
+@router.post("/login", response_model=CustomerRes)
+async def login_customer(request: CustomerReq, customers: Customers) -> CustomerRes:
+    try:
+        customer = customers.login(request.name, request.phone)
+    except DomainError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return CustomerRes.from_domain(customer)
+
 
 @router.post("", response_model=CustomerRes, status_code=status.HTTP_201_CREATED)
 async def create_customer(

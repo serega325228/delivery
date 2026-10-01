@@ -1,13 +1,14 @@
+from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
-from app.schemas.delivery import DeliveryType
 from app.models.order import Order, OrderStatus
 from app.models.order_item import OrderItem
-from app.schemas.courier import CourierRead
-from app.schemas.customer import CustomerRead
+from app.schemas.courier import CourierRes
+from app.schemas.customer import CustomerRes
+from app.schemas.delivery import DeliveryType
 
 
 class OrderReq(BaseModel):
@@ -29,6 +30,7 @@ class OrderItemCreate(BaseModel):
 
 
 class OrderItemRead(BaseModel):
+    id: UUID
     name: str
     quantity: int
     price: Decimal
@@ -43,24 +45,22 @@ class DeliveryMethodUpdate(BaseModel):
     delivery_type: DeliveryType
 
 
-class CourierAssignment(BaseModel):
-    courier_id: UUID
-
-
 class StatusUpdate(BaseModel):
     status: OrderStatus
 
 
 class OrderRes(BaseModel):
     id: UUID
-    customer: CustomerRead
+    customer: CustomerRes
+    created_at: datetime
     address: str
     items: list[OrderItemRead]
     goods_cost: Decimal
     delivery_method: DeliveryType | None
     delivery_cost: Decimal
     delivery_eta: str | None
-    courier: CourierRead | None
+    courier: CourierRes | None
+    editable: bool
     status: OrderStatus
     total_cost: Decimal
 
@@ -70,14 +70,19 @@ class OrderRes(BaseModel):
 
         return cls(
             id=order.id,
-            customer=CustomerRead.from_domain(order.customer),
+            customer=CustomerRes.from_domain(order.customer),
+            created_at=order.created_at,
             address=order.address,
-            items=[OrderItemRead.model_validate(item, from_attributes=True) for item in order.items],
+            items=[
+                OrderItemRead.model_validate(item, from_attributes=True)
+                for item in order.items
+            ],
             goods_cost=OrderService.calculate_goods_cost(order),
             delivery_method=order.delivery_type,
             delivery_cost=order.delivery_cost,
             delivery_eta=order.delivery_eta,
-            courier=CourierRead.from_domain(order.courier) if order.courier else None,
+            courier=CourierRes.from_domain(order.courier) if order.courier else None,
+            editable=OrderService.can_edit(order),
             status=order.status,
             total_cost=OrderService.calculate_total_cost(order),
         )

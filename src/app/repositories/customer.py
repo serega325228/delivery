@@ -24,6 +24,9 @@ class CustomerRepository:
         customers = self.session.scalars(select(Customer).order_by(Customer.id)).all()
         return list(customers)
 
+    def get_by_phone(self, phone: str) -> Customer | None:
+        return self.session.scalar(select(Customer).where(Customer.phone == phone))
+
     def flush(self) -> None:
         self.session.flush()
 
